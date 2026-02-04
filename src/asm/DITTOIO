@@ -1,0 +1,354 @@
+***********************************************************************
+*  DITTOIO - ASSEMBLER HELPER FOR DITTO VSAM BROWSER
+*  PROVIDES DYNAMIC ALLOCATION (SVC 99) AND VSAM I/O
+*
+*  CALLED FROM COBOL VIA: CALL 'DITTOIO' USING WS-IO-AREA
+*
+*  FUNCTIONS:
+*    ALLOC    - ALLOCATE DATASET TO DD BROWFIL (SHR)
+*    GETINFO  - OPEN VSAM ACB, SHOWCB, CLOSE ACB
+*    READFST  - READ FIRST RECORD (GTEQ FROM LOW-VALUES)
+*    READNXT  - READ NEXT RECORD AFTER GIVEN KEY
+*    READPRV  - READ PREVIOUS RECORD BEFORE GIVEN KEY
+*    READKEY  - READ AT/AFTER GIVEN KEY (GTEQ)
+*
+*  IO AREA LAYOUT (MATCHES COBOL WS-IO-AREA):
+*    +0   IO-FUNC    CL8    FUNCTION CODE
+*    +8   IO-RC      F      RETURN CODE (0=OK,4=EOF,8=ERR)
+*    +12  IO-DSN     CL44   DATASET NAME
+*    +56  IO-LRECL   F      MAX RECORD LENGTH
+*    +60  IO-KEYPOS  F      RELATIVE KEY POSITION
+*    +64  IO-KEYLEN  F      KEY LENGTH
+*    +68  IO-RECLEN  F      ACTUAL RECORD LENGTH (RETURNED)
+*    +72  IO-KEY     CL128  KEY AREA
+*    +200 IO-RECORD  CL4096 RECORD AREA
+***********************************************************************
+         PRINT NOGEN
+DITTOIO  CSECT
+         SAVE  (14,12),,DITTOIO
+         BALR  R12,0
+         USING *,R12
+         ST    R13,SAVEAREA+4
+         LA    R13,SAVEAREA
+*
+* GET IO AREA ADDRESS FROM PARAMETER LIST
+*
+         L     R2,0(R1)            ADDR OF IO AREA
+         USING IOAREA,R2
+*
+* CLEAR RETURN CODE
+*
+         XC    IORC,IORC
+*
+* DISPATCH ON FUNCTION CODE
+*
+         CLC   IOFUNC,=CL8'ALLOC'
+         BE    DOALLOC
+         CLC   IOFUNC,=CL8'GETINFO'
+         BE    DOINFO
+         CLC   IOFUNC,=CL8'READFST'
+         BE    DORFST
+         CLC   IOFUNC,=CL8'READNXT'
+         BE    DORNXT
+         CLC   IOFUNC,=CL8'READPRV'
+         BE    DORPRV
+         CLC   IOFUNC,=CL8'READKEY'
+         BE    DORKEY
+*
+* UNKNOWN FUNCTION
+*
+         MVC   IORC,=F'20'
+         B     RETURN
+*
+***********************************************************************
+*  DOALLOC - DYNAMIC ALLOCATION OF DATASET TO DD BROWFIL
+***********************************************************************
+DOALLOC  DS    0H
+*
+* FREE EXISTING ALLOCATION ON DD BROWFIL (IGNORE ERRORS)
+*
+         LA    R1,S99FRBP
+         SVC   99
+*
+* COPY DATASET NAME TO TEXT UNIT
+*
+         MVC   ALDSNM,IODSN
+*
+* ALLOCATE DATASET TO DD BROWFIL WITH DISP=SHR
+*
+         XC    S99ALFL,S99ALFL     CLEAR FLAGS
+         XC    S99ALER,S99ALER     CLEAR ERROR
+         XC    S99ALIN,S99ALIN     CLEAR INFO
+         LA    R1,S99ALBP
+         SVC   99
+         LTR   R15,R15
+         BZ    RETURN              RC=0, SUCCESS
+*
+* ALLOCATION FAILED
+*
+         MVC   IORC,=F'8'
+         B     RETURN
+*
+***********************************************************************
+*  DOINFO - OPEN VSAM ACB, SHOWCB FOR ATTRIBUTES, CLOSE
+***********************************************************************
+DOINFO   DS    0H
+         OPEN  (BFACB)
+         LTR   R15,R15
+         BZ    DINF010
+         MVC   IORC,=F'8'
+         B     RETURN
+DINF010  DS    0H
+         SHOWCB ACB=BFACB,AREA=SHOWA,LENGTH=4,FIELDS=(LRECL)
+         SHOWCB ACB=BFACB,AREA=SHOWA+4,LENGTH=4,FIELDS=(RKP)
+         SHOWCB ACB=BFACB,AREA=SHOWA+8,LENGTH=4,FIELDS=(KEYLEN)
+         LTR   R15,R15
+         BZ    DINF020
+         CLOSE (BFACB)
+         MVC   IORC,=F'8'
+         B     RETURN
+DINF020  DS    0H
+         MVC   IOLRECL,SHOWA
+         MVC   IOKEYP,SHOWA+4
+         MVC   IOKEYL,SHOWA+8
+         CLOSE (BFACB)
+         B     RETURN
+*
+***********************************************************************
+*  DORFST - READ FIRST RECORD (GTEQ FROM LOW-VALUES)
+*  COBOL SETS IO-KEY TO LOW-VALUES BEFORE CALLING
+***********************************************************************
+DORFST   DS    0H
+         BAL   R10,OPNACB
+         LTR   R15,R15
+         BNZ   DOERR8
+         BAL   R10,SETRPL
+         POINT RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         BAL   R10,CPYBACK
+         CLOSE (BFACB)
+         B     RETURN
+*
+***********************************************************************
+*  DORNXT - READ NEXT RECORD AFTER GIVEN KEY
+***********************************************************************
+DORNXT   DS    0H
+         BAL   R10,OPNACB
+         LTR   R15,R15
+         BNZ   DOERR8
+         BAL   R10,SETRPL
+         POINT RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+* SKIP CURRENT RECORD
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+* READ NEXT RECORD
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         BAL   R10,CPYBACK
+         CLOSE (BFACB)
+         B     RETURN
+*
+***********************************************************************
+*  DORPRV - READ PREVIOUS RECORD BEFORE GIVEN KEY
+***********************************************************************
+DORPRV   DS    0H
+         BAL   R10,OPNACB
+         LTR   R15,R15
+         BNZ   DOERR8
+         BAL   R10,SETRPL
+         POINT RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+* READ CURRENT TO ESTABLISH POSITION
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+* SWITCH TO BACKWARD
+         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,BWD,MVE,GEN)
+* SKIP CURRENT (READPREV RETURNS SAME)
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+* READ PREVIOUS RECORD
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         BAL   R10,CPYBACK
+         CLOSE (BFACB)
+         B     RETURN
+*
+***********************************************************************
+*  DORKEY - READ RECORD AT/AFTER GIVEN KEY (GTEQ)
+***********************************************************************
+DORKEY   DS    0H
+         BAL   R10,OPNACB
+         LTR   R15,R15
+         BNZ   DOERR8
+         BAL   R10,SETRPL
+         POINT RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         GET   RPL=BFRPL
+         LTR   R15,R15
+         BNZ   DOEOF
+         BAL   R10,CPYBACK
+         CLOSE (BFACB)
+         B     RETURN
+*
+***********************************************************************
+*  ERROR HANDLERS
+***********************************************************************
+DOERR8   DS    0H
+         MVC   IORC,=F'8'
+         B     RETURN
+DOEOF    DS    0H
+         CLOSE (BFACB)
+         MVC   IORC,=F'4'
+         B     RETURN
+*
+***********************************************************************
+*  SUBROUTINES
+***********************************************************************
+*
+* OPNACB - OPEN VSAM ACB
+*
+OPNACB   DS    0H
+         OPEN  (BFACB)
+         LTR   R15,R15
+         BR    R10
+*
+* SETRPL - SET RPL TO USE CALLER IO AREA FOR KEY AND RECORD
+*
+SETRPL   DS    0H
+         LA    R3,IOKEY
+         LA    R4,IOREC
+         MODCB RPL=BFRPL,ARG=(R3),AREA=(R4)
+         L     R3,IOKEYL
+         L     R4,IOLRECL
+         MODCB RPL=BFRPL,KEYLEN=(R3),AREALEN=(R4)
+         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,FWD,MVE,GEN)
+         BR    R10
+*
+* CPYBACK - GET ACTUAL RECORD LENGTH INTO IO AREA
+*
+CPYBACK  DS    0H
+         SHOWCB RPL=BFRPL,AREA=SHOWA,LENGTH=4,FIELDS=(RECLEN)
+         MVC   IORECL,SHOWA
+         BR    R10
+*
+***********************************************************************
+*  RETURN TO CALLER
+***********************************************************************
+RETURN   DS    0H
+         L     R13,SAVEAREA+4
+         RETURN (14,12),RC=0
+*
+***********************************************************************
+*  CONSTANTS AND WORK AREAS
+***********************************************************************
+*
+SAVEAREA DS    18F
+*
+* SHOWCB OUTPUT AREA
+*
+SHOWA    DS    3F
+*
+***********************************************************************
+*  VSAM ACCESS CONTROL BLOCK AND REQUEST PARAMETER LIST
+***********************************************************************
+BFACB    ACB   DDNAME=BROWFIL,MACRF=(KEY,SEQ,DIR,IN)
+BFRPL    RPL   ACB=BFACB,AREA=SHOWA,AREALEN=12,ARG=SHOWA
+*
+***********************************************************************
+*  SVC 99 - FREE DD BROWFIL
+***********************************************************************
+S99FRBP  DC    A(S99FRRB+X'80000000')
+S99FRRB  DC    AL1(20)              RB LENGTH
+         DC    AL1(2)               VERB = UNALLOC
+         DC    AL2(0)               FLAGS
+         DC    AL2(0)               ERROR
+         DC    AL2(0)               INFO
+         DC    A(S99FRTL)           TEXT UNIT PTR LIST
+         DC    A(0)                 RESERVED
+         DC    AL4(0)               FLAGS2
+S99FRTL  DC    A(S99FRDD+X'80000000')
+S99FRDD  DC    AL2(X'0001')        DUNDDNAM
+         DC    AL2(1)               NUMBER OF ENTRIES
+         DC    AL2(8)               LENGTH
+         DC    CL8'BROWFIL '        DD NAME
+*
+***********************************************************************
+*  SVC 99 - ALLOCATE DATASET TO DD BROWFIL (DISP=SHR)
+***********************************************************************
+S99ALBP  DC    A(S99ALRB+X'80000000')
+S99ALRB  DC    AL1(20)              RB LENGTH
+         DC    AL1(1)               VERB = ALLOC
+S99ALFL  DC    AL2(0)               FLAGS
+S99ALER  DC    AL2(0)               ERROR
+S99ALIN  DC    AL2(0)               INFO
+         DC    A(S99ALTL)           TEXT UNIT PTR LIST
+         DC    A(0)                 RESERVED
+         DC    AL4(0)               FLAGS2
+*
+S99ALTL  DC    A(S99ALDD)           DALDDNAM
+         DC    A(S99ALDS)           DALDSNAM
+         DC    A(S99ALST+X'80000000')  DALSTATS (LAST)
+*
+S99ALDD  DC    AL2(X'0001')        DALDDNAM KEY
+         DC    AL2(1)               NUMBER
+         DC    AL2(8)               LENGTH
+         DC    CL8'BROWFIL '        DD NAME
+*
+S99ALDS  DC    AL2(X'0002')        DALDSNAM KEY
+         DC    AL2(1)               NUMBER
+         DC    AL2(44)              LENGTH
+ALDSNM   DC    CL44' '             DATASET NAME (SET AT RUNTIME)
+*
+S99ALST  DC    AL2(X'0004')        DALSTATS KEY
+         DC    AL2(1)               NUMBER
+         DC    AL2(1)               LENGTH
+         DC    X'08'                DISP = SHR
+*
+***********************************************************************
+*  REGISTER EQUATES
+***********************************************************************
+R0       EQU   0
+R1       EQU   1
+R2       EQU   2
+R3       EQU   3
+R4       EQU   4
+R5       EQU   5
+R6       EQU   6
+R7       EQU   7
+R8       EQU   8
+R9       EQU   9
+R10      EQU   10
+R11      EQU   11
+R12      EQU   12
+R13      EQU   13
+R14      EQU   14
+R15      EQU   15
+*
+***********************************************************************
+*  DSECT FOR IO AREA (MAPS COBOL WS-IO-AREA)
+***********************************************************************
+IOAREA   DSECT
+IOFUNC   DS    CL8                  FUNCTION CODE
+IORC     DS    F                    RETURN CODE
+IODSN    DS    CL44                 DATASET NAME
+IOLRECL  DS    F                    MAX RECORD LENGTH
+IOKEYP   DS    F                    RELATIVE KEY POSITION
+IOKEYL   DS    F                    KEY LENGTH
+IORECL   DS    F                    ACTUAL RECORD LENGTH
+IOKEY    DS    CL128                KEY AREA
+IOREC    DS    CL4096               RECORD AREA
+*
+         END   DITTOIO

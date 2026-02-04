@@ -1,0 +1,74 @@
+         PRINT NOGEN
+***********************************************************************
+*  DITTOM - BMS MAP FOR DITTO VSAM DATASET BROWSER
+*  FOR KICKS ON MVS 3.8J
+***********************************************************************
+DITTOM   DFHMSD TYPE=&SYSPARM,LANG=COBOL,MODE=INOUT,              X
+               STORAGE=AUTO,TIOAPFX=YES,CTRL=FREEKB
+*
+DITTO1   DFHMDI SIZE=(24,80),LINE=1,COLUMN=1
+***********************************************************************
+*  ROW 1 - TITLE
+***********************************************************************
+         DFHMDF POS=(01,01),LENGTH=5,ATTRB=(ASKIP,BRT),           X
+               INITIAL='DITTO'
+         DFHMDF POS=(01,08),LENGTH=22,ATTRB=ASKIP,                X
+               INITIAL='VSAM DATASET BROWSER'
+         DFHMDF POS=(01,71),LENGTH=4,ATTRB=ASKIP,                 X
+               INITIAL='V1.0'
+***********************************************************************
+*  ROW 2 - DATASET NAME
+***********************************************************************
+         DFHMDF POS=(02,01),LENGTH=12,ATTRB=ASKIP,                X
+               INITIAL='DATASET ===>'
+DSNAME   DFHMDF POS=(02,14),LENGTH=44,ATTRB=(UNPROT,BRT,IC)
+         DFHMDF POS=(02,59),LENGTH=0,ATTRB=ASKIP
+***********************************************************************
+*  ROW 3 - KEY FOR POSITIONING
+***********************************************************************
+         DFHMDF POS=(03,01),LENGTH=12,ATTRB=ASKIP,                X
+               INITIAL='KEY     ===>'
+KEYVAL   DFHMDF POS=(03,14),LENGTH=44,ATTRB=(UNPROT,BRT)
+         DFHMDF POS=(03,59),LENGTH=0,ATTRB=ASKIP
+***********************************************************************
+*  ROW 4 - TOP RULER (SET FROM COBOL)
+***********************************************************************
+RULER1   DFHMDF POS=(04,01),LENGTH=68,ATTRB=ASKIP
+***********************************************************************
+*  ROWS 5-20 - RECORD DATA DISPLAY (16 LINES X 68 CHARS)
+***********************************************************************
+DATA01   DFHMDF POS=(05,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA02   DFHMDF POS=(06,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA03   DFHMDF POS=(07,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA04   DFHMDF POS=(08,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA05   DFHMDF POS=(09,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA06   DFHMDF POS=(10,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA07   DFHMDF POS=(11,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA08   DFHMDF POS=(12,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA09   DFHMDF POS=(13,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA10   DFHMDF POS=(14,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA11   DFHMDF POS=(15,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA12   DFHMDF POS=(16,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA13   DFHMDF POS=(17,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA14   DFHMDF POS=(18,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA15   DFHMDF POS=(19,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+DATA16   DFHMDF POS=(20,01),LENGTH=68,ATTRB=(ASKIP,BRT)
+***********************************************************************
+*  ROW 21 - BOTTOM RULER (SET FROM COBOL)
+***********************************************************************
+RULER2   DFHMDF POS=(21,01),LENGTH=68,ATTRB=ASKIP
+***********************************************************************
+*  ROW 22 - VSAM FILE INFO
+***********************************************************************
+INFO     DFHMDF POS=(22,01),LENGTH=68,ATTRB=ASKIP
+***********************************************************************
+*  ROW 23 - PF KEY LEGEND (SET FROM COBOL)
+***********************************************************************
+PFKEYS   DFHMDF POS=(23,01),LENGTH=68,ATTRB=ASKIP
+***********************************************************************
+*  ROW 24 - MESSAGE LINE
+***********************************************************************
+MSG      DFHMDF POS=(24,01),LENGTH=76,ATTRB=(ASKIP,BRT)
+*
+         DFHMSD TYPE=FINAL
+         END

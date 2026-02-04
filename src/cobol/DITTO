@@ -1,0 +1,488 @@
+//DITTOPG JOB 1,INSPROG,CLASS=A,MSGCLASS=X,MSGLEVEL=(1,1),
+//     REGION=2048K,NOTIFY=RVEZ001,USER=RVEZ001,PASSWORD=MALI4761
+//*
+//JOBPROC DD   DSN=KICKS.KICKSSYS.V1R5M0.PROCLIB,DISP=SHR
+//*-------------------------------------------------------------------
+//*  STEP 1: ASSEMBLE DITTOIO HELPER
+//*-------------------------------------------------------------------
+//ASM     EXEC PGM=IFOX00,PARM='OBJECT,NODECK'
+//SYSLIB   DD  DSN=SYS1.MACLIB,DISP=SHR
+//         DD  DSN=SYS1.AMODGEN,DISP=SHR
+//SYSUT1   DD  DSN=&&SYSUT1,UNIT=SYSDA,SPACE=(CYL,(1,1))
+//SYSUT2   DD  DSN=&&SYSUT2,UNIT=SYSDA,SPACE=(CYL,(1,1))
+//SYSUT3   DD  DSN=&&SYSUT3,UNIT=SYSDA,SPACE=(CYL,(1,1))
+//SYSPRINT DD  SYSOUT=*
+//SYSGO    DD  DSN=&&ASMOBJ,UNIT=SYSDA,SPACE=(CYL,(1,1)),
+//         DISP=(,PASS),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3200)
+//SYSIN    DD  DSN=RVEZ001.KICKS.DITTO(DITTOIO),DISP=SHR
+//*-------------------------------------------------------------------
+//*  STEP 2: COMPILE AND LINK COBOL WITH KICKS PROC
+//*-------------------------------------------------------------------
+//* PROCEDURE L NORMAL - S FOR SOURCE DEBUG
+//DFXXP00A EXEC K2KCOBCL
+//*DFXXP00A EXEC K2KCOBCS
+//COPY.SYSUT1  DD *
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. DITTO.
+      *============================================================*
+      * DITTO - VSAM DATASET BROWSER FOR KICKS/TSO ON MVS 3.8J    *
+      * COBOL 68/74 (OS/VS COBOL - IKFCBL00)                      *
+      *                                                            *
+      * TRANSACTION: DTTO                                          *
+      * MAPSET:      DITTOM    MAP: DITTO1                         *
+      * FCT FILE:    BROWFIL   (KSDS, DD=BROWFIL)                  *
+      * HELPER:      DITTOIO   (ASM - DYNALLOC + SHOWCB)           *
+      *                                                            *
+      * PSEUDO-CONVERSATIONAL BROWSE OF ANY VSAM KSDS DATASET.    *
+      * ENTER DATASET NAME TO OPEN, PF7/PF8 TO NAVIGATE,          *
+      * KEY FIELD TO POSITION, PF3 TO EXIT.                        *
+      *============================================================*
+       ENVIRONMENT DIVISION.
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+      *
+      *------------------------------------------------------------*
+      * AID KEY VALUES (EBCDIC)                                    *
+      *------------------------------------------------------------*
+       01  WS-ENTER          PIC X VALUE QUOTE.
+       01  WS-PF3            PIC X VALUE '3'.
+       01  WS-PF7            PIC X VALUE '7'.
+       01  WS-PF8            PIC X VALUE '8'.
+      *
+      *------------------------------------------------------------*
+      * COMMAREA IMAGE (PRESERVED ACROSS TRANSACTIONS)             *
+      *------------------------------------------------------------*
+       01  WS-COMM.
+           05  WC-DSNAME     PIC X(44)  VALUE SPACES.
+           05  WC-OPEN-FLG   PIC X      VALUE 'N'.
+           05  WC-LRECL      PIC S9(8)  COMP VALUE +0.
+           05  WC-KEYPOS     PIC S9(8)  COMP VALUE +0.
+           05  WC-KEYLEN     PIC S9(8)  COMP VALUE +0.
+           05  WC-RECNUM     PIC S9(8)  COMP VALUE +0.
+           05  WC-CURR-KEY   PIC X(128) VALUE LOW-VALUES.
+       01  WS-COMM-LEN       PIC S9(4)  COMP VALUE +192.
+      *
+      *------------------------------------------------------------*
+      * DITTOIO COMMUNICATION AREA                                 *
+      *------------------------------------------------------------*
+       01  WS-IO-AREA.
+           05  IO-FUNC       PIC X(8).
+           05  IO-RC          PIC S9(8) COMP.
+           05  IO-DSN        PIC X(44).
+           05  IO-LRECL      PIC S9(8) COMP.
+           05  IO-KEYPOS     PIC S9(8) COMP.
+           05  IO-KEYLEN     PIC S9(8) COMP.
+           05  IO-RECLEN     PIC S9(8) COMP.
+           05  IO-KEY        PIC X(128).
+           05  IO-RECORD     PIC X(4096).
+      *
+      *------------------------------------------------------------*
+      * WORK FIELDS                                                *
+      *------------------------------------------------------------*
+       01  WS-RECORD         PIC X(4096).
+       01  WS-REC-LINES REDEFINES WS-RECORD.
+           05  WS-REC-LINE   PIC X(68) OCCURS 16 TIMES.
+           05  FILLER        PIC X(3008).
+       01  WS-RECLEN         PIC S9(4) COMP.
+       01  WS-SUB            PIC S9(4) COMP.
+       01  WS-LINES-USED     PIC S9(4) COMP.
+       01  WS-EXIT-FLG       PIC X VALUE 'N'.
+       01  WS-ERR-FLG        PIC X VALUE 'N'.
+       01  WS-MSG-TEXT       PIC X(76).
+       01  WS-DSNAME-IN      PIC X(44).
+       01  WS-KEY-IN         PIC X(44).
+      *
+      *------------------------------------------------------------*
+      * INFO LINE (BUILT VIA MOVE, NOT STRING)                     *
+      *------------------------------------------------------------*
+       01  WS-INFO-LINE.
+           05  FILLER        PIC X(6)  VALUE 'LRECL='.
+           05  WS-IL-LRECL   PIC Z(4)9.
+           05  FILLER        PIC X(2)  VALUE '  '.
+           05  FILLER        PIC X(7)  VALUE 'KEYPOS='.
+           05  WS-IL-KEYPOS  PIC Z(4)9.
+           05  FILLER        PIC X(2)  VALUE '  '.
+           05  FILLER        PIC X(7)  VALUE 'KEYLEN='.
+           05  WS-IL-KEYLEN  PIC ZZ9.
+           05  FILLER        PIC X(2)  VALUE '  '.
+           05  FILLER        PIC X(5)  VALUE 'REC# '.
+           05  WS-IL-RECNUM  PIC Z(7)9.
+           05  FILLER        PIC X(16) VALUE SPACES.
+      *
+      *------------------------------------------------------------*
+      * RULER LINE                                                 *
+      *------------------------------------------------------------*
+       01  WS-RULER.
+           05  FILLER PIC X(20)
+               VALUE '----+----1----+----2'.
+           05  FILLER PIC X(20)
+               VALUE '----+----3----+----4'.
+           05  FILLER PIC X(20)
+               VALUE '----+----5----+----6'.
+           05  FILLER PIC X(8)
+               VALUE '----+---'.
+      *
+      *------------------------------------------------------------*
+      * PF KEY LEGEND                                              *
+      *------------------------------------------------------------*
+       01  WS-PFKEYS.
+           05  FILLER PIC X(40)
+               VALUE 'PF3=EXIT  PF7=BACK  PF8=FWD  ENTER=OPEN'.
+           05  FILLER PIC X(28)
+               VALUE '/NEXT                       '.
+      *
+      *------------------------------------------------------------*
+      * FILE NAME FOR EXEC CICS COMMANDS                           *
+      *------------------------------------------------------------*
+      *01  WS-FILENAME        PIC X(8) VALUE 'BROWFIL '.
+      *
+      *------------------------------------------------------------*
+      * SYMBOLIC MAP - INPUT (MATCHES BMS DITTO1 MAP)              *
+      * FIELD ORDER: DSNAME, KEYVAL, RULER1,                       *
+      *   DATA01-DATA16, RULER2, INFO, PFKEYS, MSG                 *
+      *------------------------------------------------------------*
+       01  DITTO1I.
+           05  D1-TIOAPFX   PIC X(12).
+      * DSNAME
+           05  DSNAMEL       PIC S9(4) COMP.
+           05  DSNAMEF       PIC X.
+           05  DSNAMEI       PIC X(44).
+      * KEYVAL
+           05  KEYVALL       PIC S9(4) COMP.
+           05  KEYVALF       PIC X.
+           05  KEYVALI       PIC X(44).
+      * RULER1
+           05  RULER1L       PIC S9(4) COMP.
+           05  RULER1F       PIC X.
+           05  RULER1I       PIC X(68).
+      * DATA LINES 01-16
+           05  D1-DATA-IN.
+               10  D1-DLINE-IN OCCURS 16 TIMES.
+                   15  DATLNL PIC S9(4) COMP.
+                   15  DATLNF PIC X.
+                   15  DATLNI PIC X(68).
+      * RULER2
+           05  RULER2L       PIC S9(4) COMP.
+           05  RULER2F       PIC X.
+           05  RULER2I       PIC X(68).
+      * INFO
+           05  INFOL         PIC S9(4) COMP.
+           05  INFOF         PIC X.
+           05  INFOI         PIC X(68).
+      * PFKEYS
+           05  PFKEYSL       PIC S9(4) COMP.
+           05  PFKEYSF       PIC X.
+           05  PFKEYSI       PIC X(68).
+      * MSG
+           05  MSGL          PIC S9(4) COMP.
+           05  MSGF          PIC X.
+           05  MSGI          PIC X(76).
+      *
+      *------------------------------------------------------------*
+      * SYMBOLIC MAP - OUTPUT (REDEFINES INPUT)                    *
+      *------------------------------------------------------------*
+       01  DITTO1O REDEFINES DITTO1I.
+           05  FILLER        PIC X(12).
+      * DSNAME
+           05  FILLER        PIC X(3).
+           05  DSNAMEO       PIC X(44).
+      * KEYVAL
+           05  FILLER        PIC X(3).
+           05  KEYVALO       PIC X(44).
+      * RULER1
+           05  FILLER        PIC X(3).
+           05  RULER1O       PIC X(68).
+      * DATA LINES 01-16
+           05  D1-DATA-OUT.
+               10  D1-DLINE-OUT OCCURS 16 TIMES.
+                   15  FILLER PIC X(3).
+                   15  DATLNO PIC X(68).
+      * RULER2
+           05  FILLER        PIC X(3).
+           05  RULER2O       PIC X(68).
+      * INFO
+           05  FILLER        PIC X(3).
+           05  INFOO         PIC X(68).
+      * PFKEYS
+           05  FILLER        PIC X(3).
+           05  PFKEYSO       PIC X(68).
+      * MSG
+           05  FILLER        PIC X(3).
+           05  MSGO          PIC X(76).
+      *
+      *------------------------------------------------------------*
+      * LINKAGE SECTION                                            *
+      *------------------------------------------------------------*
+       LINKAGE SECTION.
+       01  DFHCOMMAREA       PIC X(192).
+      *
+      *============================================================*
+      * PROCEDURE DIVISION                                         *
+      *============================================================*
+       PROCEDURE DIVISION.
+      *
+       0000-MAIN.
+           MOVE 'N' TO WS-EXIT-FLG.
+           IF EIBCALEN = 0
+               PERFORM 1000-FIRST-TIME THRU 1000-EXIT
+               GO TO 0000-RETURN.
+           MOVE DFHCOMMAREA TO WS-COMM.
+           PERFORM 2000-PROCESS THRU 2000-EXIT.
+           IF WS-EXIT-FLG = 'Y'
+               EXEC CICS SEND CONTROL ERASE FREEKB END-EXEC
+               EXEC CICS RETURN END-EXEC.
+       0000-RETURN.
+           EXEC CICS RETURN TRANSID('DTTO')
+                     COMMAREA(WS-COMM)
+                     LENGTH(WS-COMM-LEN)
+           END-EXEC.
+      *
+      *------------------------------------------------------------*
+      * 1000 - FIRST TIME ENTRY - SEND INITIAL MAP                *
+      *------------------------------------------------------------*
+       1000-FIRST-TIME.
+           MOVE LOW-VALUES TO DITTO1O.
+           MOVE WS-RULER TO RULER1O.
+           MOVE WS-RULER TO RULER2O.
+           MOVE WS-PFKEYS TO PFKEYSO.
+           MOVE SPACES TO MSGO.
+           MOVE SPACES TO INFOO.
+           MOVE 'ENTER DATASET NAME AND PRESS ENTER'
+               TO MSGO.
+           EXEC CICS SEND MAP('DITTO1') MAPSET('DITTOM')
+                     FROM(DITTO1O) ERASE
+           END-EXEC.
+       1000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 2000 - MAIN PROCESSING (PSEUDO-CONVERSATIONAL RETURN)     *
+      *------------------------------------------------------------*
+       2000-PROCESS.
+           MOVE 'N' TO WS-ERR-FLG.
+           MOVE SPACES TO WS-MSG-TEXT.
+           EXEC CICS RECEIVE MAP('DITTO1') MAPSET('DITTOM')
+                     INTO(DITTO1I)
+           END-EXEC.
+      *
+      *    DISPATCH ON AID KEY
+      *
+           IF EIBAID = WS-PF3
+               MOVE 'Y' TO WS-EXIT-FLG
+               GO TO 2000-EXIT.
+           IF EIBAID = WS-PF7
+               IF WC-OPEN-FLG = 'Y'
+                   PERFORM 6000-READ-BACKWARD THRU 6000-EXIT
+               ELSE
+                   MOVE 'NO DATASET OPEN' TO WS-MSG-TEXT.
+           IF EIBAID = WS-PF8
+               IF WC-OPEN-FLG = 'Y'
+                   PERFORM 5000-READ-FORWARD THRU 5000-EXIT
+               ELSE
+                   MOVE 'NO DATASET OPEN' TO WS-MSG-TEXT.
+           IF EIBAID = WS-ENTER
+               PERFORM 4000-ENTER-KEY THRU 4000-EXIT.
+           IF EIBAID NOT = WS-ENTER
+               IF EIBAID NOT = WS-PF7
+                   IF EIBAID NOT = WS-PF8
+                       IF EIBAID NOT = WS-PF3
+                           MOVE 'USE ENTER PF3 PF7 OR PF8'
+                               TO WS-MSG-TEXT.
+      *
+           PERFORM 8000-SEND-MAP THRU 8000-EXIT.
+       2000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 4000 - ENTER KEY PROCESSING                               *
+      *------------------------------------------------------------*
+       4000-ENTER-KEY.
+      *    CHECK IF DATASET NAME WAS ENTERED
+           IF DSNAMEL > 0
+               MOVE DSNAMEI TO WS-DSNAME-IN
+               PERFORM 4100-OPEN-DATASET THRU 4100-EXIT
+               IF WS-ERR-FLG = 'N'
+                   PERFORM 4200-READ-FIRST THRU 4200-EXIT
+               GO TO 4000-EXIT.
+      *    CHECK IF KEY WAS ENTERED FOR POSITIONING
+           IF KEYVALL > 0
+               IF WC-OPEN-FLG = 'Y'
+                   MOVE KEYVALI TO WS-KEY-IN
+                   PERFORM 7000-READ-BY-KEY THRU 7000-EXIT
+               ELSE
+                   MOVE 'OPEN DATASET FIRST' TO WS-MSG-TEXT
+               GO TO 4000-EXIT.
+      *    NO FIELDS CHANGED - READ NEXT IF FILE OPEN
+           IF WC-OPEN-FLG = 'Y'
+               PERFORM 5000-READ-FORWARD THRU 5000-EXIT
+           ELSE
+               MOVE 'ENTER DATASET NAME AND PRESS ENTER'
+                   TO WS-MSG-TEXT.
+       4000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 4100 - OPEN DATASET (CALL DITTOIO FOR DYNALLOC + SHOWCB)  *
+      *------------------------------------------------------------*
+       4100-OPEN-DATASET.
+      *    DYNAMIC ALLOCATION VIA ASSEMBLER HELPER
+           MOVE 'ALLOC   ' TO IO-FUNC.
+           MOVE WS-DSNAME-IN TO IO-DSN.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'DATASET ALLOCATION FAILED' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4100-EXIT.
+      *    GET VSAM ATTRIBUTES VIA ASSEMBLER HELPER
+           MOVE 'GETINFO ' TO IO-FUNC.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'CANNOT READ VSAM ATTRIBUTES' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4100-EXIT.
+      *    SAVE ATTRIBUTES IN COMMAREA
+           MOVE WS-DSNAME-IN TO WC-DSNAME.
+           MOVE IO-LRECL TO WC-LRECL.
+           MOVE IO-KEYPOS TO WC-KEYPOS.
+           MOVE IO-KEYLEN TO WC-KEYLEN.
+           MOVE 0 TO WC-RECNUM.
+           MOVE LOW-VALUES TO WC-CURR-KEY.
+           MOVE 'Y' TO WC-OPEN-FLG.
+           MOVE 'DATASET OPENED SUCCESSFULLY' TO WS-MSG-TEXT.
+       4100-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 4200 - READ FIRST RECORD                                  *
+      *------------------------------------------------------------*
+       4200-READ-FIRST.
+           MOVE 'READFST ' TO IO-FUNC.
+           MOVE LOW-VALUES TO IO-KEY.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'DATASET IS EMPTY' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4200-EXIT.
+           MOVE IO-RECORD TO WS-RECORD.
+           MOVE IO-KEY TO WC-CURR-KEY.
+           MOVE 1 TO WC-RECNUM.
+           MOVE 'FIRST RECORD DISPLAYED' TO WS-MSG-TEXT.
+       4200-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 5000 - READ FORWARD (NEXT RECORD)                         *
+      *------------------------------------------------------------*
+       5000-READ-FORWARD.
+           MOVE 'READNXT ' TO IO-FUNC.
+           MOVE WC-CURR-KEY TO IO-KEY.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'END OF DATASET' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 5000-EXIT.
+           MOVE IO-RECORD TO WS-RECORD.
+           MOVE IO-KEY TO WC-CURR-KEY.
+           ADD 1 TO WC-RECNUM.
+           MOVE SPACES TO WS-MSG-TEXT.
+       5000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 6000 - READ BACKWARD (PREVIOUS RECORD)                    *
+      *------------------------------------------------------------*
+       6000-READ-BACKWARD.
+           MOVE 'READPRV ' TO IO-FUNC.
+           MOVE WC-CURR-KEY TO IO-KEY.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'TOP OF DATASET' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 6000-EXIT.
+           MOVE IO-RECORD TO WS-RECORD.
+           MOVE IO-KEY TO WC-CURR-KEY.
+           SUBTRACT 1 FROM WC-RECNUM.
+           MOVE SPACES TO WS-MSG-TEXT.
+       6000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 7000 - READ BY KEY (POSITION TO USER-ENTERED KEY)         *
+      *------------------------------------------------------------*
+       7000-READ-BY-KEY.
+           MOVE 'READKEY ' TO IO-FUNC.
+           MOVE SPACES TO IO-KEY.
+           MOVE WS-KEY-IN TO IO-KEY.
+           CALL 'DITTOIO' USING WS-IO-AREA.
+           IF IO-RC NOT = 0
+               MOVE 'KEY NOT FOUND' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 7000-EXIT.
+           MOVE IO-RECORD TO WS-RECORD.
+           MOVE IO-KEY TO WC-CURR-KEY.
+           MOVE 0 TO WC-RECNUM.
+           MOVE 'RECORD FOUND' TO WS-MSG-TEXT.
+       7000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 8000 - SEND MAP WITH CURRENT DATA                         *
+      *------------------------------------------------------------*
+       8000-SEND-MAP.
+           MOVE LOW-VALUES TO DITTO1O.
+      *    SET RULERS AND PF KEY LEGEND
+           MOVE WS-RULER TO RULER1O.
+           MOVE WS-RULER TO RULER2O.
+           MOVE WS-PFKEYS TO PFKEYSO.
+      *    SET DATASET NAME
+           MOVE WC-DSNAME TO DSNAMEO.
+      *    FILL DATA LINES FROM RECORD
+           IF WS-ERR-FLG = 'N'
+               PERFORM 8100-FILL-DATA THRU 8100-EXIT
+                   VARYING WS-SUB FROM 1 BY 1
+                   UNTIL WS-SUB > 16.
+      *    BUILD INFO LINE
+           PERFORM 8200-BUILD-INFO THRU 8200-EXIT.
+      *    SET MESSAGE
+           MOVE WS-MSG-TEXT TO MSGO.
+      *    SEND MAP
+           EXEC CICS SEND MAP('DITTO1') MAPSET('DITTOM')
+                     FROM(DITTO1O) ERASE
+           END-EXEC.
+       8000-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 8100 - FILL ONE DATA LINE                                  *
+      *------------------------------------------------------------*
+       8100-FILL-DATA.
+           MOVE WS-REC-LINE(WS-SUB) TO DATLNO(WS-SUB).
+       8100-EXIT.
+           EXIT.
+      *
+      *------------------------------------------------------------*
+      * 8200 - BUILD VSAM INFO LINE                               *
+      *------------------------------------------------------------*
+       8200-BUILD-INFO.
+           IF WC-OPEN-FLG NOT = 'Y'
+               MOVE SPACES TO INFOO
+               GO TO 8200-EXIT.
+           MOVE WC-LRECL TO WS-IL-LRECL.
+           MOVE WC-KEYPOS TO WS-IL-KEYPOS.
+           MOVE WC-KEYLEN TO WS-IL-KEYLEN.
+           MOVE WC-RECNUM TO WS-IL-RECNUM.
+           MOVE WS-INFO-LINE TO INFOO.
+       8200-EXIT.
+           EXIT.
+      *
+/*
+//LKED.SYSLMOD DD DISP=SHR,DSN=KICKS.KICKSSYS.V1R5M0.KIKRPL
+//LKED.SYSIN DD *
+ INCLUDE ASMOBJ
+ INCLUDE SKIKLOAD(KIKCOBGL)
+ ENTRY DITTO
+ NAME DITTO(R)
+/*
+//LKED.ASMOBJ DD DSN=&&ASMOBJ,DISP=(OLD,DELETE)
+//LKED.SKIKLOAD DD DSN=KICKS.KICKSSYS.V1R5M0.SKIKLOAD,DISP=SHR
+//
