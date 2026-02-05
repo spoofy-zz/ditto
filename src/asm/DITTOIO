@@ -100,10 +100,15 @@ DOINFO   DS    0H
          B     RETURN
 DINF010  DS    0H
          SHOWCB ACB=BFACB,AREA=SHOWA,LENGTH=4,FIELDS=(LRECL)
+         LTR   R15,R15
+         BNZ   DINFERR
          SHOWCB ACB=BFACB,AREA=SHOWA+4,LENGTH=4,FIELDS=(RKP)
+         LTR   R15,R15
+         BNZ   DINFERR
          SHOWCB ACB=BFACB,AREA=SHOWA+8,LENGTH=4,FIELDS=(KEYLEN)
          LTR   R15,R15
          BZ    DINF020
+DINFERR  DS    0H
          CLOSE (BFACB)
          MVC   IORC,=F'8'
          B     RETURN
@@ -115,17 +120,22 @@ DINF020  DS    0H
          B     RETURN
 *
 ***********************************************************************
-*  DORFST - READ FIRST RECORD (GTEQ FROM LOW-VALUES)
-*  COBOL SETS IO-KEY TO LOW-VALUES BEFORE CALLING
+*  DORFST - READ FIRST RECORD (SEQUENTIAL FROM START)
+*  AFTER OPEN, FIRST GET READS FIRST RECORD (NO POINT NEEDED)
 ***********************************************************************
 DORFST   DS    0H
          BAL   R10,OPNACB
          LTR   R15,R15
          BNZ   DOERR8
-         BAL   R10,SETRPL
-         POINT RPL=BFRPL
-         LTR   R15,R15
-         BNZ   DOEOF
+* SET UP RPL FOR SEQUENTIAL KEYED ACCESS
+         LA    R3,IOKEY
+         LA    R4,IOREC
+         MODCB RPL=BFRPL,ARG=(R3),AREA=(R4)
+         L     R3,IOKEYL
+         L     R4,IOLRECL
+         MODCB RPL=BFRPL,KEYLEN=(R3),AREALEN=(R4)
+         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,FWD,MVE)
+* FIRST GET AFTER OPEN READS FIRST RECORD
          GET   RPL=BFRPL
          LTR   R15,R15
          BNZ   DOEOF
@@ -158,26 +168,29 @@ DORNXT   DS    0H
 *
 ***********************************************************************
 *  DORPRV - READ PREVIOUS RECORD BEFORE GIVEN KEY
+*  SET UP FOR BACKWARD ACCESS FROM START, POINT, SKIP, READ PREV
 ***********************************************************************
 DORPRV   DS    0H
          BAL   R10,OPNACB
          LTR   R15,R15
          BNZ   DOERR8
-         BAL   R10,SETRPL
+* SET UP RPL FOR BACKWARD KEYED ACCESS
+         LA    R3,IOKEY
+         LA    R4,IOREC
+         MODCB RPL=BFRPL,ARG=(R3),AREA=(R4)
+         L     R3,IOKEYL
+         L     R4,IOLRECL
+         MODCB RPL=BFRPL,KEYLEN=(R3),AREALEN=(R4)
+         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,BWD,MVE)
+* POINT TO CURRENT KEY
          POINT RPL=BFRPL
          LTR   R15,R15
          BNZ   DOEOF
-* READ CURRENT TO ESTABLISH POSITION
+* FIRST GET RETURNS RECORD AT CURRENT KEY
          GET   RPL=BFRPL
          LTR   R15,R15
          BNZ   DOEOF
-* SWITCH TO BACKWARD
-         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,BWD,MVE,GEN)
-* SKIP CURRENT (READPREV RETURNS SAME)
-         GET   RPL=BFRPL
-         LTR   R15,R15
-         BNZ   DOEOF
-* READ PREVIOUS RECORD
+* SECOND GET RETURNS PREVIOUS RECORD
          GET   RPL=BFRPL
          LTR   R15,R15
          BNZ   DOEOF
@@ -234,15 +247,23 @@ SETRPL   DS    0H
          L     R3,IOKEYL
          L     R4,IOLRECL
          MODCB RPL=BFRPL,KEYLEN=(R3),AREALEN=(R4)
-         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,FWD,MVE,GEN)
+         MODCB RPL=BFRPL,OPTCD=(KEY,SEQ,FWD,MVE)
          BR    R10
 *
-* CPYBACK - GET ACTUAL RECORD LENGTH INTO IO AREA
+* CPYBACK - GET RECORD LENGTH AND EXTRACT KEY FROM RECORD
 *
 CPYBACK  DS    0H
          SHOWCB RPL=BFRPL,AREA=SHOWA,LENGTH=4,FIELDS=(RECLEN)
          MVC   IORECL,SHOWA
+* COPY KEY FROM RECORD (AT RKP OFFSET) TO IOKEY
+         L     R5,IOKEYP            KEY POSITION IN RECORD
+         LA    R6,IOREC             RECORD ADDRESS
+         AR    R6,R5                R6 = RECORD + RKP
+         L     R7,IOKEYL            KEY LENGTH
+         BCTR  R7,0                 LENGTH - 1 FOR EX
+         EX    R7,CPYKEY            EXECUTE MVC
          BR    R10
+CPYKEY   MVC   IOKEY(0),0(R6)       EXECUTED MVC
 *
 ***********************************************************************
 *  RETURN TO CALLER

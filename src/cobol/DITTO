@@ -19,8 +19,8 @@
 //*  STEP 2: COMPILE AND LINK COBOL WITH KICKS PROC
 //*-------------------------------------------------------------------
 //* PROCEDURE L NORMAL - S FOR SOURCE DEBUG
-//DFXXP00A EXEC K2KCOBCL
-//*DFXXP00A EXEC K2KCOBCS
+//*DFXXP00A EXEC K2KCOBCL
+//DFXXP00A EXEC K2KCOBCS
 //COPY.SYSUT1  DD *
        IDENTIFICATION DIVISION.
        PROGRAM-ID. DITTO.
@@ -261,9 +261,16 @@
        2000-PROCESS.
            MOVE 'N' TO WS-ERR-FLG.
            MOVE SPACES TO WS-MSG-TEXT.
+           EXEC CICS HANDLE CONDITION MAPFAIL(2000-MAPFAIL) END-EXEC.
            EXEC CICS RECEIVE MAP('DITTO1') MAPSET('DITTOM')
                      INTO(DITTO1I)
            END-EXEC.
+           GO TO 2000-CONTINUE.
+       2000-MAPFAIL.
+           MOVE SPACES TO DITTO1I.
+           MOVE 0 TO DSNAMEL.
+           MOVE 0 TO KEYVALL.
+       2000-CONTINUE.
       *
       *    DISPATCH ON AID KEY
       *
@@ -340,6 +347,15 @@
                MOVE 'CANNOT READ VSAM ATTRIBUTES' TO WS-MSG-TEXT
                MOVE 'Y' TO WS-ERR-FLG
                GO TO 4100-EXIT.
+      *    VERIFY ATTRIBUTES ARE VALID
+           IF IO-LRECL = 0
+               MOVE 'INVALID LRECL FROM VSAM CATALOG' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4100-EXIT.
+           IF IO-KEYLEN = 0
+               MOVE 'INVALID KEYLEN FROM VSAM CATALOG' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4100-EXIT.
       *    SAVE ATTRIBUTES IN COMMAREA
            MOVE WS-DSNAME-IN TO WC-DSNAME.
            MOVE IO-LRECL TO WC-LRECL.
@@ -358,9 +374,16 @@
        4200-READ-FIRST.
            MOVE 'READFST ' TO IO-FUNC.
            MOVE LOW-VALUES TO IO-KEY.
+           MOVE WC-LRECL TO IO-LRECL.
+           MOVE WC-KEYPOS TO IO-KEYPOS.
+           MOVE WC-KEYLEN TO IO-KEYLEN.
            CALL 'DITTOIO' USING WS-IO-AREA.
-           IF IO-RC NOT = 0
+           IF IO-RC = 4
                MOVE 'DATASET IS EMPTY' TO WS-MSG-TEXT
+               MOVE 'Y' TO WS-ERR-FLG
+               GO TO 4200-EXIT.
+           IF IO-RC NOT = 0
+               MOVE 'READ ERROR ON FIRST RECORD' TO WS-MSG-TEXT
                MOVE 'Y' TO WS-ERR-FLG
                GO TO 4200-EXIT.
            MOVE IO-RECORD TO WS-RECORD.
@@ -376,6 +399,9 @@
        5000-READ-FORWARD.
            MOVE 'READNXT ' TO IO-FUNC.
            MOVE WC-CURR-KEY TO IO-KEY.
+           MOVE WC-LRECL TO IO-LRECL.
+           MOVE WC-KEYPOS TO IO-KEYPOS.
+           MOVE WC-KEYLEN TO IO-KEYLEN.
            CALL 'DITTOIO' USING WS-IO-AREA.
            IF IO-RC NOT = 0
                MOVE 'END OF DATASET' TO WS-MSG-TEXT
@@ -394,6 +420,9 @@
        6000-READ-BACKWARD.
            MOVE 'READPRV ' TO IO-FUNC.
            MOVE WC-CURR-KEY TO IO-KEY.
+           MOVE WC-LRECL TO IO-LRECL.
+           MOVE WC-KEYPOS TO IO-KEYPOS.
+           MOVE WC-KEYLEN TO IO-KEYLEN.
            CALL 'DITTOIO' USING WS-IO-AREA.
            IF IO-RC NOT = 0
                MOVE 'TOP OF DATASET' TO WS-MSG-TEXT
@@ -413,6 +442,9 @@
            MOVE 'READKEY ' TO IO-FUNC.
            MOVE SPACES TO IO-KEY.
            MOVE WS-KEY-IN TO IO-KEY.
+           MOVE WC-LRECL TO IO-LRECL.
+           MOVE WC-KEYPOS TO IO-KEYPOS.
+           MOVE WC-KEYLEN TO IO-KEYLEN.
            CALL 'DITTOIO' USING WS-IO-AREA.
            IF IO-RC NOT = 0
                MOVE 'KEY NOT FOUND' TO WS-MSG-TEXT
