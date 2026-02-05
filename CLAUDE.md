@@ -39,7 +39,6 @@ Dataset names configured for:
 After building, register in KICKS tables:
 - **PCT**: transaction `DTTO` → program `DITTO`
 - **PPT**: program `DITTO`, language `COBOL`
-- **FCT**: file `BROWFIL`, type `KSDS`, DD name `BROWFIL`
 
 ## Screen Layout (3270 Model 2, 24x80)
 
@@ -70,5 +69,4 @@ Row 24:    Message line
 src/cobol/DITTO.cbl    Main COBOL program
 src/bms/DITTOM.bms     BMS map definition
 src/asm/DITTOIO.asm    Assembler helper (SVC 99 + SHOWCB)
-jcl/BUILD.jcl          Build JCL for MVS 3.8J
 ```
