@@ -39,7 +39,6 @@ VSAM file I/O is handled entirely in the assembler helper (DITTOIO), bypassing K
 | `src/cobol/DITTO` | COBOL + JCL | Main program with build JCL wrapper |
 | `src/asm/DITTOIO` | Assembler | VSAM I/O and dynamic allocation helper |
 | `src/bms/DITTOM` | BMS map | 3270 screen layout definition |
-| `jcl/BUILD` | JCL | Standalone build JCL (reference only) |
 
 ## Prerequisites
 
