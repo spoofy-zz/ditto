@@ -1,5 +1,5 @@
 //DITTOPG JOB 1,INSPROG,CLASS=A,MSGCLASS=X,MSGLEVEL=(1,1),
-//     REGION=2048K,NOTIFY=RVEZ001
+//     REGION=2048K,NOTIFY=&SYSUID
 //*
 //JOBPROC DD   DSN=KICKS.KICKSSYS.V1R5M0.PROCLIB,DISP=SHR
 //*-------------------------------------------------------------------
