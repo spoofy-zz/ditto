@@ -425,8 +425,9 @@
            MOVE WC-KEYLEN TO IO-KEYLEN.
            CALL 'DITTOIO' USING WS-IO-AREA.
            IF IO-RC NOT = 0
-               MOVE 'TOP OF DATASET' TO WS-MSG-TEXT
-               MOVE 'Y' TO WS-ERR-FLG
+               PERFORM 4200-READ-FIRST THRU 4200-EXIT
+               IF WS-ERR-FLG = 'N'
+                   MOVE 'TOP OF DATASET' TO WS-MSG-TEXT
                GO TO 6000-EXIT.
            MOVE IO-RECORD TO WS-RECORD.
            MOVE IO-KEY TO WC-CURR-KEY.
